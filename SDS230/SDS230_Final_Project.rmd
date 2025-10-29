@@ -1,0 +1,419 @@
+---
+title: "Final Project"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+author: A11 Squad
+---
+\
+**Reads in the dataset and creates a copy with only the variables that were selected for investigation:**
+```{r}
+source("http://www.reuningscherer.net/s&ds230/Rfuncs/regJDRS.txt") #contains functions including myResPlots2()
+og_data <- read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vQYfh9CovFPYHrzm6_PM-at03yhQ8j4e8pvrKCVyDEmpN5wSCoWIRBTbsljVcLLRvqbGtlmfzVQ6tyj/pub?gid=160968224&single=true&output=csv")
+
+clean_data <- og_data[, c("Name",
+                          "Platform",
+                          "Genre",
+                          "NA_Sales",
+                          "EU_Sales",
+                          "Global_Sales",
+                          "Critic_Score",
+                          "User_Score",
+                          "Rating")]
+```
+\
+**Updates missing and useless values:**
+\
+```{r}
+clean_data$Genre[clean_data$Genre == ""] <- "Misc"
+
+clean_data$Rating[clean_data$Rating == "" | clean_data$Rating == "AO"] <- NA #too few video games rated "Adult Only"
+clean_data$Rating[clean_data$Rating == "RP"] <- NA # RP stands for Rating Pending
+```
+\
+**Removes all rows with missing variables (of those variables being investigated):**
+\
+```{r}
+clean_data <- na.omit(clean_data)
+```
+\
+**Narrows dataset to games released for the major video game console families (Nintendo, Xbox, PlayStation, and PC) and removes the games that were made for the SEGA Dreamcast (abbreviated as DC):**
+\
+```{r}
+clean_data <- clean_data[clean_data$Platform != "DC", ]
+```
+\
+**Scales the Critic_Score variable to be out of 10 instead of 100, so that it corresponds nicely with the User_Score variable (which is already out of 10):**
+\
+```{r}
+clean_data$Critic_Score <- clean_data$Critic_Score / 10
+```
+\
+**Changes the category names of the Rating variable to make them more descriptive:**
+\
+```{r}
+clean_data$Rating[clean_data$Rating %in% c("E", "K-A")] <- "Everyone"
+clean_data$Rating[clean_data$Rating == "E10+"] <- "Everyone 10+"
+clean_data$Rating[clean_data$Rating == "T"] <- "Teen"
+clean_data$Rating[clean_data$Rating == "M"] <- "Mature 17+"
+```
+\
+**Changes the category names of the Platform variable to make them more descriptive:**
+\
+```{r}
+clean_data$Platform[clean_data$Platform == "PS"] <- "PlayStation"
+clean_data$Platform[clean_data$Platform == "PS2"] <- "PlayStation 2"
+clean_data$Platform[clean_data$Platform == "PS3"] <- "PlayStation 3"
+clean_data$Platform[clean_data$Platform == "PS4"] <- "PlayStation 4"
+clean_data$Platform[clean_data$Platform == "PSP"] <- "PlayStation Portable"
+clean_data$Platform[clean_data$Platform == "PSV"] <- "PlayStation Vita"
+
+clean_data$Platform[clean_data$Platform == "XB"] <- "Xbox"
+clean_data$Platform[clean_data$Platform == "X360"] <- "Xbox 360"
+clean_data$Platform[clean_data$Platform == "XOne"] <- "Xbox One"
+
+clean_data$Platform[clean_data$Platform == "GB"] <- "Game Boy"
+clean_data$Platform[clean_data$Platform == "GBA"] <- "Game Boy Advance"
+clean_data$Platform[clean_data$Platform == "GC"] <- "GameCube"
+clean_data$Platform[clean_data$Platform == "WiiU"] <- "Wii U"
+```
+\
+**Creates a new variable that indicates whether the game is for a home console or a portable console:**
+\
+```{r}
+clean_data$Console_Type <- rep("Home Console", nrow(clean_data))
+
+portable_consoles <- c("PlayStation Portable",
+                       "PlayStation Vita",
+                       "Game Boy",
+                       "Game Boy Advance",
+                       "DS",
+                       "3DS")
+
+clean_data$Console_Type[clean_data$Platform %in% portable_consoles] <- "Portable Console"
+```
+\
+**Creatse another new variable that indicates which console family the game belongs to (Nintendo, PlayStation, Xbox, or PC):**
+\
+```{r}
+clean_data$Console_Family <- rep("Nintendo", nrow(clean_data))
+
+ps_consoles <- c("PlayStation",
+                 "PlayStation 2",
+                 "PlayStation 3",
+                 "PlayStation 4",
+                 "PlayStation Portable",
+                 "PlayStation Vita")
+
+clean_data$Console_Family[clean_data$Platform %in% ps_consoles] <- "PlayStation"
+
+xb_consoles <- c("Xbox",
+                 "Xbox 360",
+                 "Xbox One")
+
+clean_data$Console_Family[clean_data$Platform %in% xb_consoles] <- "Xbox"
+
+clean_data$Console_Family[clean_data$Platform == "PC"] <- "PC"
+```
+\
+**Now our data is *squeaky* clean. Here are all the variables in our final data set:**
+\
+```{r}
+names(clean_data)
+```
+\
+**Of these variables, `Platform`, `Genre`, `Rating`, `Console_Type`, and `Console_Family` are categorical:**
+\
+```{r}
+unique(clean_data$Platform) # 16 categories of type of platform for which the video game was designed
+unique(clean_data$Genre) # 12 categories of genre of video game (e.g. sports, action, fighting, etc.)
+unique(clean_data$Rating) # 5 categories of age appropriateness rating (intended audience)
+unique(clean_data$Console_Type) # 2 categories for type of console (home or portable)
+unique(clean_data$Console_Family) # 4 categories for more general family of console
+```
+\
+**Conversely, the variables `NA_Sales`, `EU_Sales`, `Global_Sales`, `Critic_Score`, and `User_Score` are continuous:**
+\
+```{r}
+head(clean_data$NA_Sales) # number of units sold in North America (in millions)
+head(clean_data$EU_Sales) # number of units sold in Europe (in millions)
+head(clean_data$Global_Sales) # number of total units sold globally (in millions)
+head(clean_data$Critic_Score) # average score out of 10 (as voted on by video game critics)
+head(clean_data$User_Score) # average score out of 10 (as voted on by video game users)
+head(clean_data$Year_of_Release) #year of release
+```
+\
+**Final dimensions of our dataset:**
+\
+```{r}
+dim(clean_data)
+```
+\
+
+```{r}
+library("car")
+#all sales data heavily right-skewed, indicating that a log-transformation is necessary in order to make the data more normally distributed
+boxplot(log(clean_data$NA_Sales), main = "Videogame Sales (Millions of Units) for North American Market", lwd = 2, xlab = "Log-Transformed Sales (Millions of Units)", col = "turquoise", horizontal = TRUE)
+boxplot(log(clean_data$EU_Sales), main = "Videogame Sales (Millions of Units) for European Market", lwd = 2, xlab = "Log-Transformed Sales (Millions of Units)", col = "orange", horizontal = TRUE)
+boxplot(log(clean_data$Global_Sales), main = "Videogame Sales (Millions of Units) for Global Market", lwd = 2, xlab = "Log-Transformed Sales (Millions of Units)", col = "yellow", horizontal = TRUE)
+```
+*The box plots all demonstrate a strong right-skew amongst the sales data for North American, European, and global markets. This suggested the utility of log-transforming this data in order to visualize a more normally distributed dataset for sales. However, even following the log-transformation, the data remained fairly right-skewed and contained several notably high outliers that extended beyond the third quartile added to 1.5 times the IQR (sales of blockbuster video games).*
+
+
+```{r}
+hist(clean_data$Critic_Score, col = "blue", main = "Distribution of Critic Scores for Video Games (1-10 Scale)", xlab = "Critic Scores for Video Games (1-10 Scale)", ylab = "Number of Observations", xlim = range(0:10), breaks = 50)
+hist(clean_data$User_Score, col = "blue", main = "Distribution of User Scores for Video Games (1-10 Scale)", xlab = "User Scores for Video Games (1-10 Scale)", ylab = "Number of Observations", xlim = range(0:10), breaks = 50)
+qqPlot(clean_data$Critic_Score, pch = 19, xlab = "Normal Quantiles", ylab = "Critic Score (1-10 Scale)")
+qqPlot(clean_data$User_Score, pch = 19, xlab = "Normal Quantiles", ylab = "User Score (1-10 Scale)")
+```
+
+```{r}
+boxplot(log(clean_data$Global_Sales) ~ clean_data$Genre, main = "Global Sales of Video Game (Millions of Units) by Genre", lwd = 2, xlab = "Genre of Video Game", ylab = "Log-Transformed Global Sales (Millions of Units)", col = "green", cex.axis = 1.2)
+boxplot(clean_data$Critic_Score ~ clean_data$Genre, main = "Critic Score of Video Game (1-10 Scale) by Genre", lwd = 2, xlab = "Genre of Video Game", ylab = "Critic Score (1-10 Scale)", col = "cyan", cex.axis = 1.2)
+boxplot(clean_data$User_Score ~ clean_data$Genre, main = "User Score of Video Game (1-10 Scale) by Genre", lwd = 2, xlab = "Genre of Video Game", ylab = "User Score (1-10 Scale)", col = "orange", cex.axis = 1.2)
+```
+
+```{r, warnings = FALSE}
+library("GGally")
+clean_data$Glbl_Sales <- clean_data$Global_Sales
+ggpairs(data = clean_data, columns = c("NA_Sales", "EU_Sales", "Glbl_Sales", "Critic_Score", "User_Score"), title = "Scatterplot Matrix of Video Game Sales and Critic/User Scores Data")
+```
+
+```{r}
+plot(clean_data$Critic_Score ~ clean_data$User_Score, pch = 19, col = "blue", cex = 0.7, main = "User Score Ratings vs. Critic Score Ratings", xlab = "User Score (1-10 Scale)", ylab = "Critic Score (1-10 Rating)")
+```
+*We will now run basic tests on the dataset. We run a two-sample t-test comparing the European, North American, and Global sales to each other and another two-sample t-test comparing the user and critic score.*
+```{r}
+(test1 <- t.test(clean_data$Global_Sales, clean_data$EU_Sales, conf.level=0.99))
+(test2 <- t.test(clean_data$Global_Sales, clean_data$NA_Sales, conf.level=0.99))
+(test3 <- t.test(clean_data$EU_Sales, clean_data$NA_Sales, conf.level=0.99))
+(test4 <- t.test(clean_data$Critic_Score, clean_data$User_Score, conf.level=0.99))
+```
+
+*The p-value of all four of the t-tests above are significantly below the alpha value of 0.05, so there is a clear, statistically-significant difference in the means of each pair of groups. Therefore, none of the 99% confidence intervals include 0, so there is sufficient evidence to reject the null hypothesis for each test.*
+
+*We now run some correlations to compare the global sales with the critic and user scores. First, we create the functions myCor() and permCor() that we wrote in class.*
+
+```{r}
+myCor <- function(x, y, main_t, xla, yla){
+  plot(x, y, pch = 19, col = "red", main = main_t, xlab = xla, ylab = yla)
+  mtext(paste("Sample Correlation =", round(cor(x, y), 3)), cex = 1.2)
+}
+
+options(scipen = 999)
+
+permCor <- function(x, y, var_used){
+   n_samp <- 10000
+   plotit <- T
+   corResults <- rep(NA, n_samp)
+   for (i in 1:n_samp){
+      corResults[i] <- cor(x, sample(y))
+   }
+   
+   pval <- mean(abs(corResults) >= abs(cor(x, y)))
+   
+   if (plotit == T){
+      hist(corResults, col = "yellow", main = "", xlab = "Correlations", breaks = 50,
+           xlim = range(corResults,cor(x,y)+0.1))
+      mtext(paste("Permuted Sample Correlations for:", var_used), cex = 1.2, line = 1)
+      mtext(paste0("Permuted P-value = ", round(pval, 4),", Calculated P-value = ", round(cor.test(x, y)$p.value, 7)), cex = 0.8, line = 0)
+      abline(v = cor(x, y), col = "blue", lwd = 3)
+      text(cor(x,y)*1.05, 0, paste("Actual Correlation =", round(cor(x, y), 2)), srt = 90, adj = 0)
+   }
+   if (plotit == F){
+      return(round(pval, 7))
+   }  
+}
+```
+
+*Now, we run correlations comparing global sales with user and critic scores.*
+
+```{r}
+myCor(clean_data$Global_Sales, clean_data$Critic_Score, "Regression Model Between Critic Scores and Global Sales \n", "Global Sales (millions of units)", "Critic Score (1-10 Scale)")
+permCor(clean_data$Global_Sales, clean_data$Critic_Score, "Critic Scores and Global Sales")
+
+myCor(clean_data$Global_Sales, clean_data$User_Score, "Regression Model Between User Scores and Global Sales \n", "Global Sales (millions of units)", "User Score (1-10 Scale)")
+permCor(clean_data$Global_Sales, clean_data$User_Score, "User Scores and Global Sales")
+
+myCor(clean_data$User_Score, clean_data$Critic_Score, "Regression Model Between User Scores and Critic Scores \n","User Score (1-10 Scale)", "Critic Score (1-10 Scale)")
+permCor(clean_data$User_Score, clean_data$Critic_Score, "User Scores and Critic Scores")
+
+```
+
+*There is a very distant (large) outlier amongst the global sales, so this large outlier is removed in order to avoid false linearity, a necessary assumption for a correlation analysis. Additionally, a log transformation is used on the sales in order to address the strong right-skew of this data. The correlation between user and critic score is relatively linear and positive, with an r-value of 0.581.*
+
+```{r}
+clean_data_subset <- subset(clean_data, clean_data$Global_Sales < 10) #removes very large outlier from correlation analysis (as opposed to                                                                            above correlations)
+myCor(clean_data_subset$Global_Sales, clean_data_subset$Critic_Score, "Regression Model Between Critic Scores and Global Sales \n", "Global Sales (millions of units)", "Critic Score (1-10 Scale)")
+permCor(clean_data_subset$Global_Sales, clean_data_subset$Critic_Score, "Critic Scores and Global Sales")
+
+myCor(clean_data_subset$Global_Sales, clean_data_subset$User_Score, "Regression Model Between User Scores and Global Sales \n", "Global Sales (millions of units)", "User Score (1-10 Scale)")
+permCor(clean_data_subset$Global_Sales, clean_data_subset$User_Score, "User Scores and Global Sales")
+
+myCor(clean_data_subset$User_Score, clean_data_subset$Critic_Score, "Regression Model Between User Scores and Critic Scores \n","User Score (1-10 Scale)", "Critic Score (1-10 Scale)")
+permCor(clean_data_subset$User_Score, clean_data_subset$Critic_Score, "User Scores and Critic Scores")
+```
+
+*The relationships between log of global sales and user and critic scores are still not linear, so it is not appropriate to calculate a correlation. The correlation between user and critic scores are barely changed.*
+
+
+*We now get 10000 bootstrap samples to find bootstrap confidence intervals for the global sales depending on different genres. We also use a 2-sample t-test to determine the theoretical interval of the difference in th means. First, we will compare shooter and action games.*
+
+```{r, warning = F}
+test1 <- t.test(clean_data$Global_Sales[clean_data$Genre == "Action" | clean_data$Genre == "Shooter"] ~ clean_data$Genre[clean_data$Genre == "Action" | clean_data$Genre == "Shooter"], conf.level=0.99)
+test1
+
+diff1 <- rep(NA, 10000)
+for(i in 1:10000) {
+  action <- sample(clean_data$Global_Sales[clean_data$Genre == "Action"], sum(clean_data$Genre == "Action"), replace=TRUE)
+  shooter <- sample(clean_data$Global_Sales[clean_data$Genre == "Shooter"], sum(clean_data$Genre == "Shooter"), replace=TRUE)
+  diff1[i] <- mean(action-shooter)
+}
+
+interval1 <- quantile(diff1, c(0.005, 0.995))
+round(interval1, digits = 2)
+
+boot_ci_1 <- test1$conf.int
+hist(diff1, col = "blue", main = paste("Bootstrapped Sample Difference in Means of Global Sales \n for Action vs. Shooter Video Games"), xlab = "Global Sales (millions of units)", ylab = "Number of Observations", breaks = 50)
+abline(v = interval1, lwd = 3, col = "red")
+abline(v = boot_ci_1, lwd = 3, col = "green", lty = 2)
+legend("topright", c("Original CI", "Bootstrapped CI"), lwd = 3, col = c("red ", "green"), lty = c(1,2))
+```
+
+*From the theoretical interval, there is evidence of a mean difference between the groups because the p-value is less than 0.05 and the interval does not include 0, so there is sufficient evidence to reject the null hypothesis. The bootstrap confidence interval includes 0, so the bootstrap CI alone is not sufficient evidence to reject the null hypothesis.*
+
+*We repeat this process to compare sports games and racing games.*
+
+```{r, warning = F}
+test2 <- t.test(clean_data$Global_Sales[clean_data$Genre == "Sports" | clean_data$Genre == "Racing"] ~ clean_data$Genre[clean_data$Genre == "Sports" | clean_data$Genre == "Racing"], conf.level=0.99)
+test2
+
+diff2 <- rep(NA, 10000)
+for(i in 1:10000) {
+  sports <- sample(clean_data$Global_Sales[clean_data$Genre == "Sports"], sum(clean_data$Genre == "Sports"), replace=TRUE)
+  racing <- sample(clean_data$Global_Sales[clean_data$Genre == "Racing"], sum(clean_data$Genre == "Racing"), replace=TRUE)
+  diff2[i] <- mean(sports-racing)
+}
+
+interval2 <- quantile(diff2, c(0.005, 0.995))
+round(interval2, digits = 2)
+
+boot_ci_2 <- test2$conf.int
+hist(diff2, col = "blue", main = paste("Bootstrapped Sample Difference in Means of Global Sales \n for Sports vs. Racing Video Games"), xlab = "Global Sales (millions of units)", ylab = "Number of Observations", breaks = 50)
+abline(v = interval2, lwd = 3, col = "red")
+abline(v = boot_ci_2, lwd = 3, col = "green", lty = 2)
+legend("topright", c("Original CI", "Bootstrapped CI"), lwd = 3, col = c("red ", "green"), lty = c(1,2))
+```
+
+*The p-value of the confidence interval is greater than the alpha value, so the theoretical confidence interval includes 0, so there is not sufficient evidence of the difference in the means of the two groups. The bootstrap confidence interval also includes 0, so this CI is in accordance with the theoretical confidence interval.*
+
+
+*Multiple Regression (Backwards Stepwise)*
+```{r}
+Platform <- clean_data$Platform
+Console <- clean_data$Console_Family
+Rating <- clean_data$Rating
+Genre <- clean_data$Genre
+Global_Sales <- clean_data$Global_Sales
+User_Score <- clean_data$User_Score
+Critic_Score <- clean_data$Critic_Score
+unique(Platform)
+unique(Rating)
+unique(Genre)
+interaction.plot(Console, Rating, Global_Sales, type = 'b', lwd = 3, col = 1:4, ylab = "Global Sales (Millions of Units)", xlab = "Console Family", main = "Interaction Plot of Video Game Rating and Console Family", cex.axis = 0.7)
+interaction.plot(Genre, Rating, Global_Sales, type = 'b', lwd = 3, col = 1:4, ylab = "Global Sales (Millions of Units)", xlab = " Genre", main = "Interaction Plot of Video Game Rating and Genre", las = 3, cex.axis = 0.7)
+interaction.plot(Console, Genre, Global_Sales, type = 'b', lwd = 3, col = 1:12, ylab = "Global Sales (Millions of Units)", xlab = "Console Family", main = "Interaction Plot of Video Game Genre and Console", cex.axis = 0.7)
+
+cr <- lm(Global_Sales ~ Console + Rating + Console * Rating)
+gr <- lm(Global_Sales ~ Genre + Rating + Genre * Rating)
+cg <- lm(Global_Sales ~ Console + Genre + Console * Genre)
+#Interaction effects removed due to issues of multicollinearity (received error regarding aliased coefficients)
+Anova(cr, type = 'III', singular.ok = T)
+Anova(gr, type = 'III', singular.ok = T)
+Anova(cg, type = 'III', singular.ok = T)
+
+myResPlots2(cr)
+myResPlots2(gr)
+myResPlots2(cg)
+
+#Initial model used for multiple regression (all potentially statistically significant interactions included)
+m1 <- lm(Global_Sales ~ Critic_Score + User_Score + Console + Rating + Genre + Console*Rating + Console*Genre + Critic_Score*User_Score + User_Score*Genre + Critic_Score*Genre + Console*User_Score + Console*Critic_Score + Rating*Critic_Score + Rating*User_Score + Rating*Genre)
+Anova(m1, type = 'III', singular.ok = T)
+summary(m1)
+
+#Final Model following backwards stepwise regression (remove insignificant interaction effects)
+m2 <- lm(Global_Sales ~ Critic_Score + User_Score + Console + Rating + Genre + Console*Rating + Console*Genre + Critic_Score*User_Score + Console*User_Score + Console*Critic_Score + Rating*Critic_Score)
+Anova(m2, type = 'III', singular.ok = T)
+summary(m2)
+```
+
+
+```{r}
+myResPlots(m2, label = "Final GLM")
+```
+*First, let's get an idea of the data:*
+```{r}
+boxplot(clean_data$Critic_Score~clean_data$Console_Family, xlab="Console Family", ylab="Critic Score", main="Critic Score by Console Family", col=3:6)
+means <- tapply(clean_data$Critic_Score, clean_data$Console_Family, mean)
+points(means, col = "red", pch = 19, cex = 1.2)
+print(round(means))
+```
+*Quick check to make sure we can run the one-way anova test*
+```{r}
+(sds <- tapply(clean_data$Critic_Score, clean_data$Console_Family, sd))
+(ratio <- round(max(sds)/min(sds), 1))
+```
+*The ratio of the maximum standard deviation to minimum standard deviation is less than 2, so we are good. Now, let's run the one-way anova test and calculate/plot Tukey simultaneous 95% confidence intervals for differences in critic score.*
+```{r}
+Console <- clean_data$Console_Family
+Critic_Score <- clean_data$Critic_Score
+aov1 <- aov(Critic_Score ~ Console)
+summary(aov1)
+pairwise.t.test(Critic_Score, Console) 
+#Fix margins
+par(mar=c(5, 11, 4, 1))
+plot(TukeyHSD(aov1), las = 1)
+myResPlots2(aov1)
+
+(trans1 <- boxCox(aov1))
+```
+*The Nq plot does not look linear as the majority of points do not fall within guidelines. There is no strong change in spread but many values on the residual plots are outliers, giving some evidence for heteroskedacity. PC-Nintendo, Playstation-Nintendo, Playstation-PC, Xbox-Nintendo, and Xbox-PC all have pvalues (< 2e-16, 6.1e-10, < 2e-16, 1.98e-08, and < 2e-16 respectively) less than an alpha of 0.05, meaning there are statistically significant differences between the mean critic score for each console family.*
+
+*Now, we will do the ANCOVA test. Before we do the ANCOVA test, let's take a look at the EU_Sales histogram.*
+
+```{r}
+hist(clean_data$EU_Sales, breaks=100, xlab="Sales in the European Union (millions)", main="Histogram of Sales of different games in the EU (millions)", col="red")
+```
+*In order to maximize the accuracy, we should remove some of the outliers. From the histogram, it is clear that a very large chunk of the data falls between 0-1 million, so let's keep the limit the data to that range.*
+```{r}
+clean_data <- clean_data[clean_data$EU_Sales<1,]
+hist(clean_data$EU_Sales, breaks=100, xlab="European Sales (Millions of Units)", main="Distribution of Video Game Units (Millions) Sold in Europe", col="red")
+```
+*Now, we are actually ready to start the ANCOVA*
+```{r}
+m3<- lm(EU_Sales  ~ Console_Family +Critic_Score + Console_Family*Critic_Score, data = clean_data)
+Anova(m3, type = 'III')
+summary(m3)
+
+myResPlots2(m3)
+```
+*The multiple R squared value is 0.09702, indicating that 9.702% of the variability in the final model can be explained by the final variables in the model. The NQ plot does not show a linear model, as the majority of values fall outside of normal guidelines. The residuals plot also shows strong evidence of heteroskedacity due to numerous outliers and a strong increase in spread as fitted values increase. The continous predictor of our value was critic_score, with a pvalue of 2.80e-13, which is statistically significant since it is less than an alpha of 0.05. It has a coefficient of 0.02189m meaning for every one increase in critic_score, we expect a 0.02189 increase in EU sales. For categorical predictors, consolefamily_PC, consolefamilyPlayStation, and consolefamily_xbox all have pvalues less than 0.05 (0.0037, 1.10e-05, 6.79e-07 respectively), making them statistically signficant predictors. These predictors also had negative coefficients. All three interactions were statistically significant. Console_FamilyPC:Critic_Score, Console_FamilyPlayStation:Critic_Score, and onsole_FamilyXbox:Critic_Score had pvalues (0.0135, 3.35e-09, and 4.98e-09) less than an alpha of 0.05. *
+
+```{r}
+clean_data <- clean_data[clean_data$EU_Sales<1,]
+plot(EU_Sales ~ Critic_Score, data = clean_data, col = factor(Console_Family), main = 
+       "European Sales (millions of units) vs Critic Score by Console Family",
+     xlab = "Critic Score (1-10 Scale)", 
+     ylab="European Sales (millions of units)", pch = 16, cex = .5)
+legend("topleft", col = 1:4, legend = levels(factor(clean_data$Console_Family)), pch = 16)
+coefs<- coef(m3)
+#nintendo, pc ,play station, xbox
+abline(a=coefs[1], b =coefs[5], lwd=3, col=1)
+abline(a=coefs[1]+coefs[2], b =coefs[5]+coefs[6], lwd=3, col=2)
+abline(a=coefs[1]+coefs[3], b =coefs[5]+coefs[7], lwd=3, col=3)
+abline(a = coefs[1] + coefs[4], b = coefs[5] + coefs[8], lwd = 3, col = 4)
+```
+*Every console family shows a positive regression between critic score and European sales.*
+
+\
