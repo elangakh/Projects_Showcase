@@ -12,6 +12,7 @@
 - Implemented and trained diffusion models in **PyTorch** to empirically validate mathematical findings.  
 - Compared convergence behavior, noise schedules, and sample quality between diffusion and adversarial frameworks.
 
+---
 
 ### SDS 230 – Statistical Analysis of Video Game Sales and Ratings (1980–2020)
 - Conducted an extensive statistical analysis of global video game sales and rating data spanning four decades (1980–2020).  
